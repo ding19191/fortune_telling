@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>周易 AI 靈卦 - 深度詳解版</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Serif TC', serif; background-color: #f8fafc; }
+        .line-yang { height: 12px; background-color: #1e293b; border-radius: 4px; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .line-yin-container { display: flex; justify-content: space-between; width: 100%; height: 12px; }
+        .line-yin-part { width: 46%; background-color: #1e293b; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .moving-mark { color: #ef4444; font-weight: bold; position: absolute; right: -30px; top: -6px; font-size: 20px; }
+        .analysis-text h5 { font-weight: bold; color: #f1f5f9; margin-top: 1.5rem; margin-bottom: 0.75rem; border-left: 4px solid #3b82f6; padding-left: 0.75rem; font-size: 1.1rem; }
+        .analysis-text p { margin-bottom: 1rem; color: #cbd5e1; line-height: 1.8; text-align: justify; }
+        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const HEXAGRAM_MAP = {
+            "111111": { name: "乾為天", trait: "剛健、主動、領導", meaning: "象徵天之運行，剛健不息。此卦利於進取，象徵極大的成功潛力。" },
+            "000000": { name: "坤為地", trait: "柔順、承載、包容", meaning: "象徵大地之厚德。宜守不宜攻，待人以寬，厚德載物。" },
+            "100010": { name: "水雷屯", trait: "創業艱辛、萌芽", meaning: "初生之象。充滿困難但富有生命力，宜堅定意志，不宜輕舉妄動。" },
+            "010001": { name: "山水蒙", trait: "啟蒙、迷惘、求教", meaning: "蒙昧發現。象徵處於學習階段，需要導師指引。" },
+            "111010": { name: "水天需", trait: "等待、時機、蓄勢", meaning: "需者，待也。時機尚未成熟，應耐心等待，蓄勢待發。" },
+            "010111": { name: "天水訟", trait: "爭執、不和、慎行", meaning: "慎防爭訟。與人不和之象，宜退讓一步，冤家宜解不宜結。" },
+            "010000": { name: "地水師", trait: "紀律、組織、負擔", meaning: "統率眾人。需有紀律與正義，方能克敵致勝。" },
+            "000010": { name: "水地比", trait: "親近、合作、互助", meaning: "吉。象徵輔助、和諧、團結，利於尋求合作夥伴。" },
+            "111011": { name: "風天小畜", trait: "微小蓄積、阻礙", meaning: "目前只能小有成就，需繼續積累，不可操之過急。" },
+            "110111": { name: "天澤履", trait: "禮儀、謹慎、實踐", meaning: "如履薄冰。如踩在老虎尾巴上，需極度謹慎、守禮方可脫險。" },
+            "111000": { name: "地天泰", trait: "通暢、和諧、交融", meaning: "大吉。陰陽交融，萬事亨通，適合發展大事業。" },
+            "000111": { name: "天地否", trait: "閉塞、混亂、退隱", meaning: "凶。小人得志，正道衰微。此時宜守志，不宜張揚。" },
+            "101111": { name: "天火同人", trait: "團結、大同、合作", meaning: "利於集體行動，與人合作無往不利。" },
+            "111101": { name: "火天大有", trait: "盛大、富足、豐收", meaning: "如日中天。資源充足，氣運極旺，但需謙虛守成。" },
+            "000100": { name: "地山謙", trait: "謙遜、避鋒、獲益", meaning: "謙虛必獲益。即便身處高位也應保持低調。" },
+            "001000": { name: "雷地豫", trait: "預備、和樂、順勢", meaning: "利於建功立業，應順勢而為，提前做好規劃。" },
+            "100110": { name: "澤雷隨", trait: "跟隨、應變、隨俗", meaning: "隨機應變。順從潮流，不固執己見，則能亨通。" },
+            "011001": { name: "山風蠱", trait: "整治、革新、修復", meaning: "腐敗之象。需要大膽改革，掃除陳疾，方有新生。" },
+            "110000": { name: "地澤臨", trait: "觀察、迫近、管理", meaning: "好運即將來臨，但要防範盛極而衰。" },
+            "000011": { name: "風地觀", trait: "體察、仰望、反省", meaning: "不宜躁進，應靜心觀察局勢，提升自我。" },
+            "100101": { name: "火雷噬嗑", trait: "障礙、決斷、排除", meaning: "象徵執法、斷是非，需果斷排除阻礙事業的障礙。" },
+            "101001": { name: "山火賁", trait: "文飾、外表、禮儀", meaning: "象徵外表華麗但實質可能不足，宜充實內在。" },
+            "000001": { name: "山地剝", trait: "衰退、剝落、不利", meaning: "凶。小人勢盛，君子困頓。宜隱忍待時。" },
+            "100000": { name: "地雷復", trait: "復興、轉機、回歸", meaning: "轉機。黑暗已過，曙光初現。利於重新開始。" },
+            "100111": { name: "天雷無妄", trait: "真誠、天意、災禍", meaning: "順其自然。不可有非分之想，守正則吉。" },
+            "111001": { name: "山天大畜", trait: "儲蓄、厚積、能量", meaning: "大有積蓄。宜學習、充實能力，利於承擔重任。" },
+            "100001": { name: "山雷頤", trait: "養生、自足、言行", meaning: "注意言語與飲食，觀察如何自食其力。" },
+            "011110": { name: "澤風大過", trait: "壓力、過度、決策", meaning: "象徵行動超過負荷，需有非常手段才能脫困。" },
+            "010010": { name: "坎為水", trait: "重重險陷、誠信", meaning: "凶。險中之險。需保持誠信，內心安定方能度過。" },
+            "101101": { name: "離為火", trait: "光明、依附、智慧", meaning: "象徵智慧、光明。需依附正道，則前程似錦。" },
+            "011100": { name: "澤山咸", trait: "感應、吸引、交流", meaning: "象徵男女、人際間的和諧交流，誠意方能感人。" },
+            "001110": { name: "雷風恆", trait: "長久、穩定、恆心", meaning: "恆心。長久堅持正道。不宜變動，穩定中求發展。" },
+            "001111": { name: "天山遯", trait: "隱退、避世、自保", meaning: "退避。小人勢長，宜及早抽身，遠離是非之地。" },
+            "111100": { name: "雷天大壯", trait: "強大、衝動、力量", meaning: "壯大。力量強盛，但要注意不可恃強凌弱。" },
+            "000101": { name: "火地晉", trait: "前進、晉升、光明", meaning: "大吉。象徵獲得重用、晉升，事業進入快速期。" },
+            "101000": { name: "地火明夷", trait: "受傷、黑暗、守志", meaning: "艱難。黑暗籠罩，應內明外柔，隱藏鋒芒以自保。" },
+            "101011": { name: "風火家人", trait: "內部、紀律、家庭", meaning: "象徵內部和諧，利於從內部建立秩序。" },
+            "110101": { name: "火澤睽", trait: "乖離、異見、矛盾", meaning: "背離。意見不合。此時小事可成，大事難就。" },
+            "010100": { name: "水山蹇", trait: "蹇阻、止步、反省", meaning: "凶。前有大水後有山。宜止不宜進。" },
+            "001010": { name: "雷水解", trait: "解脫、消散、寬恕", meaning: "困難消散。危機已過，宜快刀斬亂麻。" },
+            "110001": { name: "山澤損", trait: "減損、誠信、修養", meaning: "損己利人。短期損失可能換來長期回報。" },
+            "100011": { name: "風雷益", trait: "獲益、助人、進取", meaning: "大吉。正是積極行動的大好時機。" },
+            "111110": { name: "澤天夬", trait: "決斷、決裂、果敢", meaning: "決斷。必須堅決清除阻礙，但要防止暴力。" },
+            "011111": { name: "天風姤", trait: "邂逅、防範、突發", meaning: "要注意不可忽視微小的威脅。" },
+            "000011": { name: "澤地萃", trait: "聚集、精英、和諧", meaning: "人才聚集。需防備突發的混亂。" },
+            "110000": { name: "地風升", trait: "上升、尋求、積累", meaning: "如植物生長，利於求職，循序漸進必有所成。" },
+            "011010": { name: "澤水困", trait: "乾枯、困頓、守靜", meaning: "窮困。陷入僵局。此時應守正，修養心性。" },
+            "010110": { name: "水風井", trait: "穩定、修養、資源", meaning: "象徵資源穩定但需維護，利於改善基礎。" },
+            "101110": { name: "澤火革", trait: "變革、革新、改變", meaning: "舊有方式已行不通，必須大膽革新方有生路。" },
+            "011101": { name: "火風鼎", trait: "鼎新、重任、穩定", meaning: "象徵獲得權力或領導地位，發展順利。" },
+            "001001": { name: "震為雷", trait: "震驚、驚醒、警覺", meaning: "雖有驚雷但不必恐懼，應反省自修。" },
+            "100100": { name: "艮為山", trait: "靜止、邊界、守位", meaning: "止也。不宜躁進，應安於現狀，自我克制。" },
+            "001011": { name: "風山漸", trait: "循序、穩定、發展", meaning: "步步為營，持之以恆必有結果。" },
+            "110100": { name: "雷澤歸妹", trait: "失當、衝動、混亂", meaning: "凶。行為不當。不宜進行長遠規劃。" },
+            "001101": { name: "雷火豐", trait: "繁榮、頂峰、警惕", meaning: "亨。如日中天，但要防止日中則昃。" },
+            "101100": { name: "火山旅", trait: "漂泊、不安、客居", meaning: "象徵不安定。應守本分，不可與人爭執。" },
+            "011011": { name: "巽為風", trait: "順服、深入、細緻", meaning: "利於深入了解事情真相，適合文職工作。" },
+            "110110": { name: "兌為澤", trait: "悅色、交流、口才", meaning: "象徵快樂、談話。利於交際，但要防口舌。" },
+            "010011": { name: "風水渙", trait: "渙散、整合、拯救", meaning: "人心渙散，需要用精神力量來團結。" },
+            "110010": { name: "水澤節", trait: "節制、限度、規則", meaning: "節制。過度節制會痛苦，不節制會潰敗。" },
+            "110011": { name: "風澤中孚", trait: "誠信、感應、核心", meaning: "內心誠實，利於談判與建立信賴。" },
+            "001100": { name: "雷山小過", trait: "微過、謹慎、守舊", meaning: "小事吉。應採取保守策略，宜守。" },
+            "101010": { name: "水火既濟", trait: "完成、成功、防衰", meaning: "事情已經圓滿，但要極度防範物極必反。" },
+            "010101": { name: "火水未濟", trait: "希望、未竟、黎明", meaning: "黎明前的黑暗。只要堅持到底，終能成功。" }
+        };
+
+        const App = () => {
+            const [question, setQuestion] = useState('');
+            const [step, setStep] = useState(0); 
+            const [currentLines, setCurrentLines] = useState([]);
+            const [isRolling, setIsRolling] = useState(false);
+            const [aiAnalysis, setAiAnalysis] = useState('');
+            const [isAnalysing, setIsAnalysing] = useState(false);
+
+            const rollCoins = () => {
+                if (step !== 1 || currentLines.length >= 6 || isRolling) return;
+                setIsRolling(true);
+                setTimeout(() => {
+                    const coins = [Math.random() > 0.5, Math.random() > 0.5, Math.random() > 0.5];
+                    const heads = coins.filter(Boolean).length;
+                    // 老陽9(3正), 老陰6(0正), 少陰8(2正), 少陽7(1正)
+                    let res = heads === 3 ? 9 : heads === 0 ? 6 : heads === 2 ? 8 : 7;
+                    setCurrentLines(prev => [...prev, res]);
+                    setIsRolling(false);
+                }, 600);
+            };
+
+            useEffect(() => {
+                if (currentLines.length === 6) setStep(2);
+            }, [currentLines]);
+
+            const getGuaCode = (type) => {
+                return currentLines.map(line => {
+                    if (type === 'original') return (line === 7 || line === 9) ? '1' : '0';
+                    if (type === 'changed') return (line === 6 || line === 7) ? '1' : '0';
+                    return '0';
+                }).join('');
+            };
+
+            const originalCode = getGuaCode('original');
+            const changedCode = getGuaCode('changed');
+            const originalGua = HEXAGRAM_MAP[originalCode] || { name: "神祕卦", trait: "不可測", meaning: "卦象罕見。" };
+            const changedGua = HEXAGRAM_MAP[changedCode] || { name: "變換卦", trait: "變數", meaning: "未來在變。" };
+
+            const fetchAIAnalysis = async () => {
+                setIsAnalysing(true);
+                const apiKey = "AIzaSyA5Jd5qki8m_Acvy12np6YSNuiUbHyz1Fk"; // 系統環境自動注入
+
+                const systemPrompt = `你是一位享譽全球的《易經》大師。
+請根據使用者問題、本卦、變卦及動爻（變爻），提供極致詳盡的報告。
+結構要求：
+1. 【大勢全局】：描述目前處境與未來轉變趨勢。
+2. 【核心哲理】：引用易經思想解釋此卦對人生的啟示。
+3. 【四維詳解】：
+    - 事業與工作：具體的進退建議。
+    - 感情與人際：如何應對關係變動。
+    - 財運與資產：理財策略。
+    - 身心與情緒：心理建議。
+4. 【動爻關鍵點】：根據變爻所在位置（第幾爻）給出特定提醒。
+5. 【一字斷機】：給出最關鍵的一個字作為指引。
+使用繁體中文，格式清晰。`;
+
+                const movingLinesIdx = currentLines.map((l, i) => (l === 6 || l === 9) ? i + 1 : null).filter(n => n !== null);
+                const userPrompt = `提問：${question}
+本卦：${originalGua.name} (${originalCode})
+變卦：${changedGua.name} (${changedCode})
+動爻位置：第 ${movingLinesIdx.join(", ")} 爻。`;
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: userPrompt }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                        })
+                    });
+                    const data = await response.json();
+                    setAiAnalysis(data.candidates?.[0]?.content?.parts?.[0]?.text || "天機難測，請稍後重試。");
+                } catch (e) {
+                    setAiAnalysis("【大師簡評】\n目前網路連接不穩定。根據《" + originalGua.name + "》，您的處境為「" + originalGua.trait + "」。建議：" + originalGua.meaning);
+                } finally {
+                    setIsAnalysing(false);
+                }
+            };
+
+            useEffect(() => { if (step === 2) fetchAIAnalysis(); }, [step]);
+
+            const renderLine = (val, isChangedGua = false) => {
+                const isYang = (val === 7 || val === 9);
+                const isMoving = (val === 6 || val === 9);
+                
+                let effectiveYang = isYang;
+                if (isChangedGua) {
+                    if (val === 9) effectiveYang = false;
+                    if (val === 6) effectiveYang = true;
+                }
+
+                return (
+                    <div className="flex items-center justify-center w-40 mb-3 relative">
+                        {effectiveYang ? <div className="line-yang" /> : (
+                            <div className="line-yin-container">
+                                <div className="line-yin-part" />
+                                <div className="line-yin-part" />
+                            </div>
+                        )}
+                        {!isChangedGua && isMoving && <span className="moving-mark">●</span>}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen py-12 px-4 md:px-6">
+                    <div className="max-w-4xl mx-auto bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-slate-100">
+                        <header className="bg-slate-900 py-12 text-center relative">
+                            <h1 className="text-4xl text-white font-bold tracking-[0.4em] relative z-10">周易靈卦</h1>
+                            <p className="text-slate-400 mt-3 tracking-widest text-sm relative z-10 uppercase">AI Oracle Deep Analysis</p>
+                        </header>
+
+                        <main className="p-8 md:p-14">
+                            {step === 0 && (
+                                <div className="space-y-10 animate-fade-in text-center">
+                                    <h2 className="text-2xl font-bold text-slate-800">請輸入您想占問的問題</h2>
+                                    <textarea 
+                                        className="w-full p-7 border-2 border-slate-100 rounded-[2rem] focus:border-slate-900 outline-none transition-all text-xl bg-slate-50 shadow-inner font-sans"
+                                        rows="4"
+                                        placeholder="例如：關於此次合作案的最終結果？"
+                                        value={question}
+                                        onChange={(e) => setQuestion(e.target.value)}
+                                    />
+                                    <button 
+                                        onClick={() => question.trim() && setStep(1)}
+                                        className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold text-xl hover:bg-slate-800 shadow-xl transform active:scale-[0.98] transition-all"
+                                    >開始啟卦</button>
+                                </div>
+                            )}
+
+                            {step === 1 && (
+                                <div className="text-center animate-fade-in">
+                                    <p className="text-2xl font-bold text-slate-800 mb-12">「{question}」</p>
+                                    <div className="flex flex-col items-center bg-slate-50 p-12 rounded-[3rem] border border-slate-100 mb-12 shadow-sm">
+                                        {[...Array(6)].map((_, i) => (
+                                            <div key={i}>
+                                                {currentLines[5-i] ? renderLine(currentLines[5-i]) : (
+                                                    <div className="w-40 h-3 mb-3 bg-slate-200/40 rounded-full animate-pulse" />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button 
+                                        onClick={rollCoins}
+                                        disabled={isRolling}
+                                        className={`w-32 h-32 rounded-full border-[6px] border-slate-900 text-2xl font-bold transition-all shadow-2xl ${isRolling ? 'bg-slate-100 scale-95 opacity-50' : 'hover:scale-110 active:scale-90 bg-white'}`}
+                                    >
+                                        {isRolling ? '...' : '占'}
+                                    </button>
+                                    <p className="mt-8 text-slate-400">已獲 {currentLines.length} 爻，尚需 {6 - currentLines.length} 爻</p>
+                                </div>
+                            )}
+
+                            {step === 2 && (
+                                <div className="space-y-16 animate-fade-in">
+                                    <div className="grid md:grid-cols-2 gap-12">
+                                        <div className="text-center">
+                                            <div className="text-xs font-bold text-slate-400 mb-4 tracking-widest">本卦 (現狀)</div>
+                                            <h3 className="text-4xl font-bold mb-6">{originalGua.name}</h3>
+                                            <div className="bg-slate-50 p-10 rounded-[2.5rem] flex flex-col items-center border border-slate-100">
+                                                {[...currentLines].reverse().map((l, i) => renderLine(l))}
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-xs font-bold text-blue-500 mb-4 tracking-widest">之卦 (發展)</div>
+                                            <h3 className="text-4xl font-bold text-blue-900 mb-6">{changedGua.name}</h3>
+                                            <div className="bg-blue-50/30 p-10 rounded-[2.5rem] flex flex-col items-center border border-blue-100">
+                                                {[...currentLines].reverse().map((l, i) => renderLine(l, true))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800 p-10 md:p-14 rounded-[3rem] shadow-2xl">
+                                        <h4 className="text-2xl font-bold text-white mb-8 border-b border-slate-700 pb-4">
+                                            🔮 大師詳解報告
+                                        </h4>
+                                        <div className="analysis-text">
+                                            {isAnalysing ? (
+                                                <div className="flex flex-col items-center py-20">
+                                                    <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                                    <p className="text-blue-400 tracking-widest">大師正在參透天機...</p>
+                                                </div>
+                                            ) : (
+                                                <div className="font-sans">
+                                                    {aiAnalysis.split('\n').map((line, i) => {
+                                                        if (line.startsWith('【')) return <h5 key={i}>{line}</h5>;
+                                                        if (line.trim() === '') return <br key={i} />;
+                                                        return <p key={i}>{line}</p>;
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => {setStep(0); setCurrentLines([]); setAiAnalysis('');}}
+                                        className="block mx-auto px-10 py-3 text-slate-400 hover:text-slate-900 border border-slate-200 rounded-full transition-all"
+                                    >重新啟卦</button>
+                                </div>
+                            )}
+                        </main>
+                        
+                        <footer className="bg-slate-50 p-8 text-center text-slate-400 text-xs tracking-widest border-t border-slate-100">
+                            占卜僅供啟發與參考，人生由自己定義。
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+    </script>
+</body>
+</html>
+
+<p><a href="index.html">回到首頁</a></p>
